@@ -1,0 +1,8 @@
+# don’t try to commit the repo’s own metadata
+.git/
+
+# ignore your development-container configs
+.devcontainer/
+
+*.o
+hexeditplus
