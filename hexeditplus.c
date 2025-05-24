@@ -9,7 +9,7 @@
 bool done = false;
 bool debug = false;
 char file_name[128];
-int unit_size;
+int unit_size = 1;
 unsigned char mem_buf[10000];
 size_t mem_count;
 int display_mode = 0;  // 0 = hexadecimal (initial), 1 = decimal 
@@ -40,6 +40,7 @@ void quit();
 
 /* Auxilary */
 void print_debug_data();
+void print_units(FILE* output, unsigned char* buffer, int count, int start_addr);
 
 
 struct fun_desc{
@@ -58,6 +59,13 @@ struct fun_desc menu[] = {
   {"memory modify", memory_modify},
   {"Quit", quit},
   {NULL, NULL}
+};
+
+static char* hex_formats[] = {
+  "%#hhx\n", "%#hx\n", "No such unit", "%#x\n"
+};
+static char* dec_formats[] = {
+  "%#hhd\n", "%#hd\n", "No such unit", "%#d\n"
 };
 
 
@@ -101,7 +109,7 @@ void toggle_debug_mode() {
 void set_file_name() {
     char buf[100];
 
-    printf("Enter file name: ");
+    printf(" Enter file name: \n> ");
     if (fgets(buf, sizeof(buf), stdin) == NULL) {
         printf("Error reading file name\n");
         return;
@@ -121,7 +129,7 @@ void set_file_name() {
 void set_unit_size() {
     int val;
 
-    printf("Enter unit size (1, 2, or 4): ");
+    printf("Enter unit size (1, 2, or 4): \n> ");
     if (scanf("%d", &val) != 1) {
         printf("Invalid input\n");
         /* clear stdin */
@@ -168,7 +176,7 @@ void load_into_memory() {
     int length;
 
     // Prompt the user for location in hexadecimal, and length (in decimal).
-    printf("Please enter <location> <length>\n");
+    printf("Please enter <location> <length>\n> ");
     if (!fgets(line, sizeof(line), stdin)) {
         perror("fgets failed");
         return;
@@ -195,13 +203,10 @@ void load_into_memory() {
     }
     else {
         printf("loaded %d units into memory\n", length);
-    }
-
-
+    } 
     // close file
     if (close(fd) == -1)
         perror("close");
-    
 }
 
 void toggle_display_mode() {
@@ -219,7 +224,54 @@ void toggle_display_mode() {
 }
 
 void memory_display() {
-    printf("Not implemented yet\n");
+    char line[128];
+    int u;
+    int addr;
+
+    // Prompt the user for units in in decimal, and length (in hexdecimal).
+    printf("Enter address and length:\n> ");
+
+    if (!fgets(line, sizeof(line), stdin)) {
+        perror("fgets failed");
+        return;
+    }
+
+    // parse decimal into u, hexdecimal into addr 
+    if (sscanf(line, "%x %d", &addr, &u) != 2) {
+        printf("Error: expected a decimal units, and a hexadicmal addr\n");
+        return;
+    }
+
+    print_units(stdout, mem_buf, u, addr);
+
+}
+
+/* Prints the buffer to screen by converting it to text with printf */
+void print_units(FILE* output, unsigned char* buffer, int count, int start_addr) {
+    unsigned char *start = buffer + start_addr; // keep `buffer` intact
+    unsigned char *end = start + unit_size * count;
+    int idx = unit_size - 1; // 0 for 1-byte, 1 for 2-byte, 3 for 4-byte
+
+    if (display_mode) {
+        printf("Decimal\n=======\n");
+    } else {
+        printf("Hexadecimal\n=======\n");
+    }
+
+    while (start < end) {
+        int val = 0;
+        // Safely load up to 4 bytes into an int
+        memcpy(&val, start, unit_size);
+
+        if (display_mode) {
+            fprintf(output, dec_formats[idx], val);
+        } else {
+            fprintf(output, hex_formats[idx], val);
+        }
+
+        start += unit_size;
+    }
+
 }
 
 void save_into_file() {
