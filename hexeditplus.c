@@ -12,6 +12,7 @@ char file_name[128];
 int unit_size;
 unsigned char mem_buf[10000];
 size_t mem_count;
+int display_mode = 0;  // 0 = hexadecimal (initial), 1 = decimal 
 
 /*
 Choose action:
@@ -204,7 +205,17 @@ void load_into_memory() {
 }
 
 void toggle_display_mode() {
-    printf("Not implemented yet\n");
+    if (display_mode) {
+        // Currently decimal → switch off to hexadecimal 
+        display_mode = 0;
+        printf("Display flag now off, hexadecimal representation\n");
+    }
+    else {
+        // Currently hexadecimal → switch on to decimal 
+        display_mode = 1;
+        printf("Display flag now on, decimal representation\n");
+    }
+
 }
 
 void memory_display() {
