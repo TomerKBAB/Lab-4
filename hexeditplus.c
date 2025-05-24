@@ -275,7 +275,77 @@ void print_units(FILE* output, unsigned char* buffer, int count, int start_addr)
 }
 
 void save_into_file() {
-    printf("Not implemented yet\n");
+    char line[128];
+    unsigned int src_addr, target_location;
+    int length;
+
+    // Prompt the user for source address (hex) target location (hex) and length (dec) 
+    printf("Please enter <source-address> <target-location> <length>\n");
+
+    if (!fgets(line, sizeof(line), stdin)) {
+        perror("fgets failed");
+        return;
+    }
+
+    // parse the data
+    if (sscanf(line, "%x %x %d", &src_addr, &target_location, &length) != 2) {
+        fprintf(stderr, "expected for source address (hex) target location (hex) and length (dec)");
+        return;
+    }
+
+    // Debug print 
+    if (debug) {
+        fprintf(stderr,
+            "Debug: file=\"%s\", src=0x%X, tgt=0x%X, length=%d\n",
+            file_name, src_addr, target_location, length);
+    }
+
+    // Open for read/write
+    int fd = open(file_name, O_RDWR);
+    if (fd < 0) {
+        perror("open");
+        return;
+    }
+
+    // Check file size
+    off_t file_size = lseek(fd, 0, SEEK_END);
+    if (file_size < 0) {
+        perror("lseek");
+        close(fd);
+        return;
+    }
+    if ((off_t)target_location> file_size) {
+        fprintf(stderr, "Error: target offset 0x%X beyond end of file (0x%zX)\n",
+               target_location, (size_t)file_size);
+        close(fd);
+        return;
+    }
+
+    // Compute source pointer (note this line works on 32 bit, problem on 64 bit)
+    unsigned char *src_ptr = (src_addr == 0) ? mem_buf : (unsigned char*)src_addr;
+
+    // Seek to target and write
+    if (lseek(fd, target_location, SEEK_SET) == (off_t)-1) {
+        perror("lseek");
+        close(fd);
+        return;
+    }
+    ssize_t to_write = (ssize_t)length * unit_size;
+    ssize_t written  = write(fd, src_ptr, to_write);
+    if (written < 0) {
+        perror("write");
+    }
+    else if (written != to_write) {
+        fprintf(stderr, "Warning: only wrote %zd of %zd bytes\n",
+               written, to_write);
+    }
+    else {
+        printf("Saved %d units into file\n", length);
+    }
+
+    if (close(fd) < 0) {
+        perror("close");
+    }
 }
 
 void memory_modify() {
