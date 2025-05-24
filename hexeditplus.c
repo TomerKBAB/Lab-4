@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 
 bool done = false;
@@ -41,7 +43,7 @@ void print_debug_data();
 
 struct fun_desc{
   char *name;
-  char (*fun)();
+  void (*fun)();
 };
 
 struct fun_desc menu[] = {
@@ -58,7 +60,7 @@ struct fun_desc menu[] = {
 };
 
 
-int main(int argc, char **argv) {
+int main() {
     char buf[12];
     int menu_size = 0;
     while(menu[menu_size].name != NULL) {
@@ -141,14 +143,64 @@ void set_unit_size() {
 void print_debug_data() {
     if (debug) {
         fprintf(stderr,
-            "Debug: unit_size=%d, file_name=\"%s\", mem_count=%d\n",
+            "Debug: unit_size=%d, file_name=\"%s\", mem_count=%zu\n",
             unit_size, file_name[0]? file_name : "(none)", mem_count);
     }
 }
 
-/* === stubs for the other menu actions === */
 void load_into_memory() {
-    printf("Not implemented yet\n");
+    // Check if file_name is empty 
+    if (strcmp(file_name, "") == 0) {
+        fprintf(stderr, "file name is empty");
+        return;
+    }
+
+    // Open file
+    int fd = open(file_name, O_RDWR);
+    if (fd < 0) {
+        perror("open");
+        return;
+    }
+
+    char line[128];
+    unsigned int location;
+    int length;
+
+    // Prompt the user for location in hexadecimal, and length (in decimal).
+    printf("Please enter <location> <length>\n");
+    if (!fgets(line, sizeof(line), stdin)) {
+        perror("fgets failed");
+        return;
+    }
+
+    // parse hex into location, decimal into length 
+    if (sscanf(line, "%x %d", &location, &length) != 2) {
+        printf("Error: expected a hex offset and a decimal length\n");
+        return;
+    }
+
+    // print debug
+    if (debug) {
+        fprintf(stderr,
+            "Debug: file_name=\"%s\", location=0x%X, length=%d\n",
+            file_name, location, length);
+    }
+
+    // read from file_name length * unit_size bytes of data in to mem_buf
+    lseek(fd, location, SEEK_SET);
+    int num_bytes_to_read = length * unit_size;
+    if(read(fd, mem_buf, num_bytes_to_read) != num_bytes_to_read) {
+        perror("read");
+    }
+    else {
+        printf("loaded %d units into memory\n", length);
+    }
+
+
+    // close file
+    if (close(fd) == -1)
+        perror("close");
+    
 }
 
 void toggle_display_mode() {
