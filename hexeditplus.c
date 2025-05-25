@@ -200,8 +200,10 @@ void load_into_memory() {
     int num_bytes_to_read = length * unit_size;
     if(read(fd, mem_buf, num_bytes_to_read) != num_bytes_to_read) {
         perror("read");
+        mem_count = 0;
     }
     else {
+        mem_count = num_bytes_to_read;
         printf("loaded %d units into memory\n", length);
     } 
     // close file
@@ -288,7 +290,7 @@ void save_into_file() {
     }
 
     // parse the data
-    if (sscanf(line, "%x %x %d", &src_addr, &target_location, &length) != 2) {
+    if (sscanf(line, "%x %x %d", &src_addr, &target_location, &length) != 3) {
         fprintf(stderr, "expected for source address (hex) target location (hex) and length (dec)");
         return;
     }
@@ -321,8 +323,23 @@ void save_into_file() {
         return;
     }
 
-    // Compute source pointer (note this line works on 32 bit, problem on 64 bit)
-    unsigned char *src_ptr = (src_addr == 0) ? mem_buf : (unsigned char*)src_addr;
+    unsigned char *src_ptr;
+
+    if (src_addr > mem_count) {
+    fprintf(stderr, "Error: source offset 0x%X beyond end of buffer (0x%zX)\n",
+            src_addr, mem_count);
+    close(fd);
+    return;
+    }
+    src_ptr = mem_buf + src_addr;
+
+    // check that you actually have length * unit_size bytes available
+    if ((size_t)src_addr + length*unit_size > mem_count) {
+    fprintf(stderr, "Error: cannot write %d units from offset 0x%X; only 0x%zX bytes loaded\n",
+            length, src_addr, mem_count);
+    close(fd);
+    return;
+}
 
     // Seek to target and write
     if (lseek(fd, target_location, SEEK_SET) == (off_t)-1) {
@@ -349,9 +366,74 @@ void save_into_file() {
 }
 
 void memory_modify() {
-    printf("Not implemented yet\n");
+    char line[128];
+    unsigned int location;
+    unsigned int val;
+
+    /* Prompt for buffer offset and value */
+    printf("Please enter <location> <val>\n");
+    if (!fgets(line, sizeof(line), stdin)) {
+        perror("fgets failed");
+        return;
+    }
+
+    /* Parse two hex values */
+    if (sscanf(line, "%x %x", &location, &val) != 2) {
+        fprintf(stderr, "Invalid input. Expected: <location> <val>\n");
+        return;
+    }
+
+    /* Debug output */
+    if (debug) {
+        fprintf(stderr, "Debug: location=0x%X, val=0x%X\n", location, val);
+    }
+
+    /* Bounds check */
+    if ((size_t)location + (size_t)unit_size > mem_count) {
+        fprintf(stderr,
+                "Error: location 0x%X + %d exceeds loaded memory size (0x%zX)\n",
+                location, unit_size, mem_count);
+        return;
+    }
+
+    /* Perform the write of 'unit_size' bytes into mem_buf */
+    unsigned char *ptr = mem_buf + location;
+    /* Copy the raw bytes of 'val' into the buffer location */
+    memcpy(ptr, &val, unit_size);
+
+    printf("Modified memory at offset 0x%X with value 0x%X\n", location, val);
 }
 
 void quit() {
     exit(0);
 }
+
+// TASK 2
+/*
+ *  readelf -h deep_thought | grep 'Entry point'
+ * Calculate where in the file to patch
+ * elf header e_entry lives at byte 0x18 and 4 bytes long
+ * to fix: load from start in 4 bytes jump (at least 8 units)
+ * modify the buffer with : 18 8048350
+ * copy back to file: 18 18 1
+*/
+
+// TASK 3
+/*
+ * readelf -s offensive |grep main
+ *    vir addr  size  NDX section
+ * - 0804841d   23    13
+ * readelf -S offensive| grep main
+ * .text     addr     off    size
+ *          08048320 000320 000192
+ * file_offset = (VALUE - Addr) + Off
+ * file_offset = (0804841d - 08048320) + 320 (HEX)
+ * file_offset = FD + 320 = 41D
+ * (then use hexeditplus to change the first opcode to C3 instead of all nops)
+*/
+
+// TASK 4
+/* 
+*   readelf -s ntsc | grep count_digits
+    ....
+*/
